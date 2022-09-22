@@ -20,6 +20,8 @@ import java.nio.FloatBuffer
 import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel
 import java.util.*
+import kotlin.math.acos
+import kotlin.math.round
 import kotlin.math.sqrt
 
 
@@ -60,6 +62,30 @@ class MainActivity : AppCompatActivity() {
         }
         Log.d(TAG, "onCreate: $v")
 
+        val tmpv1 = mutableListOf<FloatArray>()
+        for(i in 0..18) {
+            if(i != 3 && i != 7 && i != 11 && i != 15) {
+                tmpv1.add(v[i])
+            }
+        }
+        val tmpv2 = mutableListOf<FloatArray>()
+        for(i in 1..19) {
+            if(i != 4 && i != 8 && i != 12 && i != 16) {
+                tmpv2.add(v[i])
+            }
+        }
+
+        val einsum = FloatArray(15)
+        for( i in 0..14) {
+            einsum[i] = tmpv1[i][0] * tmpv2[i][0] + tmpv1[i][1] * tmpv2[i][1] + tmpv1[i][2] * tmpv2[i][2]
+        }
+        val angle = FloatArray(15)
+        val data = FloatArray(15)
+        for(i in 0..14) {
+            angle[i] = Math.toDegrees(acos(einsum[i]).toDouble()).toFloat()
+            data[i] = round(angle[i] * 100000) / 100000
+        }
+
 
 
         // Interpreter와 Input 초기화
@@ -99,7 +125,8 @@ class MainActivity : AppCompatActivity() {
             outputs.add(outputsFloatBuffer.get())
         }
         Log.d(TAG, "outputs : $outputs")
-
+        val sortedOutput = outputs.sortedDescending()
+        val index = outputs.indexOf(sortedOutput[0])
     }
 
     private fun getTfliteInterpreter(path: String): Interpreter? {
