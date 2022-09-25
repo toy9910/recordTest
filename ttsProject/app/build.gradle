@@ -46,4 +46,8 @@ dependencies {
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.4.0'
 
     implementation 'io.github.ParkSangGwon:tedpermission:2.3.0'
+
+    // MediaPipe Hands Solution.
+    implementation 'com.google.mediapipe:solution-core:latest.release'
+    implementation 'com.google.mediapipe:hands:latest.release'
 }
