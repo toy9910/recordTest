@@ -16,6 +16,7 @@ package com.example.ttsproject
 import com.google.mediapipe.solutioncore.ResultGlRenderer
 import com.google.mediapipe.solutions.hands.HandsResult
 import android.opengl.GLES20
+import android.util.Log
 import com.example.ttsproject.HandsResultGlRenderer
 import com.google.mediapipe.formats.proto.LandmarkProto.NormalizedLandmark
 import com.google.mediapipe.solutions.hands.Hands
@@ -61,6 +62,10 @@ class HandsResultGlRenderer : ResultGlRenderer<HandsResult?> {
                 result.multiHandLandmarks()[i].landmarkList,
                 if (isLeftHand) LEFT_HAND_CONNECTION_COLOR else RIGHT_HAND_CONNECTION_COLOR
             )
+            for(ind in result.multiHandLandmarks()[i].landmarkList.indices) {
+                val lm = result.multiHandLandmarks()[i].landmarkList[ind]
+                Log.d(TAG, "LandMark[$ind] | x : ${lm.x}, y : ${lm.y}, z : ${lm.z}")
+            }
             for (landmark in result.multiHandLandmarks()[i].landmarkList) {
                 // Draws the landmark.
                 drawCircle(
@@ -68,6 +73,7 @@ class HandsResultGlRenderer : ResultGlRenderer<HandsResult?> {
                     landmark.y,
                     if (isLeftHand) LEFT_HAND_LANDMARK_COLOR else RIGHT_HAND_LANDMARK_COLOR
                 )
+                //Log.d(TAG, "LandMark | x : ${landmark.x}, y : ${landmark.y}, z : ${landmark.z}")
                 // Draws a hollow circle around the landmark.
                 drawHollowCircle(
                     landmark.x,

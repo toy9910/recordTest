@@ -1,6 +1,7 @@
 package com.example.ttsproject
 
 import android.Manifest
+import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import android.speech.RecognitionListener
@@ -20,7 +21,23 @@ import com.google.mediapipe.solutions.hands.HandsOptions
 import com.google.mediapipe.solutions.hands.HandsResult
 import com.gun0912.tedpermission.PermissionListener
 import com.gun0912.tedpermission.TedPermission
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.tensorflow.lite.DataType
+import org.tensorflow.lite.Interpreter
+import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
+import java.io.FileInputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.nio.MappedByteBuffer
+import java.nio.channels.FileChannel
 import java.util.*
+import kotlin.coroutines.coroutineContext
+import kotlin.math.acos
+import kotlin.math.round
+import kotlin.math.sqrt
 
 class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private val TAG = "MainActivity"
@@ -29,6 +46,10 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private lateinit var hands : Hands
     private lateinit var cameraInput: CameraInput
     private lateinit var glSurfaceView: SolutionGlSurfaceView<HandsResult>
+
+    private val classes = arrayListOf("ㄱ", "ㄴ", "ㄷ", "ㄹ", "ㅁ", "ㅂ", "ㅅ", "ㅇ",
+        "ㅈ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ", "ㅏ", "ㅐ",
+        "ㅑ", "ㅓ", "ㅔ", "ㅕ", "ㅗ", "ㅛ", "ㅜ", "ㅠ", "ㅡ", "ㅣ")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -60,8 +81,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         binding.btnRecord.setOnClickListener {
             startSTT()
         }
-
         setupStreamingModePipeline()
+
     }
 
     override fun onInit(p0: Int) {
@@ -210,6 +231,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 //                    wristLandmark.x, wristLandmark.y
 //                )
 //            )
+            translate(result)
         }
         if (result.multiHandWorldLandmarks().isEmpty()) {
             return
@@ -223,5 +245,113 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 wristWorldLandmark.x, wristWorldLandmark.y, wristWorldLandmark.z
             )
         )
+    }
+
+    private fun translate(result : HandsResult){
+        if (result.multiHandLandmarks().isEmpty()) {
+            return
+        }
+        val landmarkList = result.multiHandLandmarks()[0].landmarkList
+        val joint = Array(21){FloatArray(3)}
+        for(i in 0..19) {
+            joint[i][0] = landmarkList[i].x
+            joint[i][1] = landmarkList[i].y
+            joint[i][2] = landmarkList[i].z
+        }
+
+        val v1 = joint.slice(0..19).toMutableList()
+        for(i in 4..16 step(4)) {
+            v1[i] = v1[0]
+        }
+        var v2 = joint.slice(1..20)
+        val v = Array(20) { FloatArray(3) }
+
+        for(i in 0..19) {
+            for(j in 0..2) {
+                v[i][j] = v2[i][j] - v1[i][j]
+            }
+        }
+        //Log.d(TAG, "onCreate: $v")
+
+        for(i in 0..19) {
+            val norm = sqrt(v[i][0] * v[i][0] + v[i][1] * v[i][1] + v[i][2] * v[i][2])
+            for(j in 0..2) {
+                v[i][j] /= norm
+            }
+        }
+        //Log.d(TAG, "onCreate: $v")
+
+        val tmpv1 = mutableListOf<FloatArray>()
+        for(i in 0..18) {
+            if(i != 3 && i != 7 && i != 11 && i != 15) {
+                tmpv1.add(v[i])
+            }
+        }
+        val tmpv2 = mutableListOf<FloatArray>()
+        for(i in 1..19) {
+            if(i != 4 && i != 8 && i != 12 && i != 16) {
+                tmpv2.add(v[i])
+            }
+        }
+
+        val einsum = FloatArray(15)
+        for( i in 0..14) {
+            einsum[i] = tmpv1[i][0] * tmpv2[i][0] + tmpv1[i][1] * tmpv2[i][1] + tmpv1[i][2] * tmpv2[i][2]
+        }
+        val angle = FloatArray(15)
+        val data = FloatArray(15)
+        for(i in 0..14) {
+            angle[i] = Math.toDegrees(acos(einsum[i]).toDouble()).toFloat()
+            data[i] = round(angle[i] * 100000) / 100000
+        }
+
+        val interpreter = getTfliteInterpreter("converted_model.tflite")
+        val byteBuffer = ByteBuffer.allocateDirect(15*4).order(ByteOrder.nativeOrder())
+
+        for(d in data) {
+            byteBuffer.putFloat(d)
+        }
+
+        val modelOutput = ByteBuffer.allocateDirect(26*4).order(ByteOrder.nativeOrder())
+        modelOutput.rewind()
+
+        interpreter!!.run(byteBuffer,modelOutput)
+
+        val outputFeature0 = TensorBuffer.createFixedSize(intArrayOf(1,26), DataType.FLOAT32)
+        outputFeature0.loadBuffer(modelOutput)
+
+        // ByteBuffer to FloatBuffer
+        val outputsFloatBuffer = modelOutput.asFloatBuffer()
+        val outputs = mutableListOf<Float>()
+        for(i in 1..26) {
+            outputs.add(outputsFloatBuffer.get())
+        }
+        Log.d(TAG, "outputs : $outputs")
+        val sortedOutput = outputs.sortedDescending()
+        val index = outputs.indexOf(sortedOutput[0])
+        Log.d(TAG, "translate: ${classes[index]}")
+        runOnUiThread {
+            binding.tvResult.text = classes[index]
+        }
+
+    }
+
+    private fun getTfliteInterpreter(path: String): Interpreter? {
+        try {
+            return Interpreter(loadModelFile(this, path)!!)
+        }
+        catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return null
+    }
+
+    private fun loadModelFile(activity: Activity, path: String): MappedByteBuffer? {
+        val fileDescriptor = activity.assets.openFd(path)
+        val inputStream = FileInputStream(fileDescriptor.fileDescriptor)
+        val fileChannel = inputStream.channel
+        val startOffset = fileDescriptor.startOffset
+        val declaredLength = fileDescriptor.declaredLength
+        return fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength)
     }
 }
