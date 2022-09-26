@@ -13,6 +13,29 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"/>
 
+    <Button
+        android:id="@+id/btn_tstart"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="tstart"
+        app:layout_constraintTop_toBottomOf="@id/preview_display_layout"
+        app:layout_constraintStart_toStartOf="parent"/>
+    <Button
+        android:id="@+id/btn_tend"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="tend"
+        app:layout_constraintTop_toBottomOf="@id/preview_display_layout"
+        app:layout_constraintStart_toEndOf="@id/btn_tstart"/>
+
+    <TextView
+        android:id="@+id/tv_time"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="jifewfwefwefwefwefwefew"
+        app:layout_constraintTop_toBottomOf="@id/preview_display_layout"
+        app:layout_constraintStart_toEndOf="@id/btn_tend"/>
+
     <EditText
         android:id="@+id/et_sentence"
         android:layout_width="300dp"

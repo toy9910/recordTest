@@ -13,6 +13,8 @@ import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.example.ttsproject.databinding.ActivityMainBinding
+import com.github.kimkevin.hangulparser.HangulParser
+import com.google.android.gms.common.util.Hex
 import com.google.mediapipe.solutioncore.CameraInput
 import com.google.mediapipe.solutioncore.SolutionGlSurfaceView
 import com.google.mediapipe.solutions.hands.HandLandmark
@@ -46,10 +48,22 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private lateinit var hands : Hands
     private lateinit var cameraInput: CameraInput
     private lateinit var glSurfaceView: SolutionGlSurfaceView<HandsResult>
+    private var charlist = mutableListOf<String>()
+    private var startTime = 0L
+    private var isStarted = false
+
 
     private val classes = arrayListOf("ㄱ", "ㄴ", "ㄷ", "ㄹ", "ㅁ", "ㅂ", "ㅅ", "ㅇ",
         "ㅈ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ", "ㅏ", "ㅐ",
         "ㅑ", "ㅓ", "ㅔ", "ㅕ", "ㅗ", "ㅛ", "ㅜ", "ㅠ", "ㅡ", "ㅣ")
+
+    private val Cho = arrayListOf(0x3131, 0x3132, 0x3134, 0x3137, 0x3138, 0x3139, 0x3141, 0x3142, 0x3143,
+        0x3145, 0x3146, 0x3147, 0x3148, 0x3149, 0x314a, 0x314b, 0x314c, 0x314d, 0x314e)
+    private val Jun = arrayListOf("ㅏ", "ㅐ", "ㅑ", "ㅓ", "ㅔ", "ㅕ", "ㅗ", "ㅛ", "ㅜ", "ㅠ", "ㅡ", "ㅣ",
+        "ㅒ", "ㅟ", "ㅢ", "ㅚ", "ㅘ", "ㅞ", "ㅙ", )
+    private val Jon = arrayListOf(0x0000, 0x3131, 0x3132, 0x3133, 0x3134, 0x3135, 0x3136, 0x3137, 0x3139,
+        0x313a, 0x313b, 0x313c, 0x313d, 0x313e, 0x313f, 0x3140, 0x3141, 0x3142, 0x3144, 0x3145, 0x3146,
+        0x3147, 0x3148, 0x314a, 0x314b, 0x314c, 0x314d, 0x314e)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -83,7 +97,20 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
         setupStreamingModePipeline()
 
+        binding.btnTstart.setOnClickListener {
+            startTime = System.currentTimeMillis()
+            isStarted = true
+            charlist.clear()
+            binding.tvTime.text = startTime.toString()
+        }
+        binding.btnTend.setOnClickListener {
+            isStarted = false
+            charlist.clear()
+            convertToSentence()
+        }
     }
+
+
 
     override fun onInit(p0: Int) {
         if(p0 == TextToSpeech.SUCCESS) {
@@ -248,7 +275,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     private fun translate(result : HandsResult){
-        if (result.multiHandLandmarks().isEmpty()) {
+        if (result.multiHandLandmarks().isEmpty() || !isStarted) {
             return
         }
         val landmarkList = result.multiHandLandmarks()[0].landmarkList
@@ -331,9 +358,103 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         val index = outputs.indexOf(sortedOutput[0])
         Log.d(TAG, "translate: ${classes[index]}")
         runOnUiThread {
-            binding.tvResult.text = classes[index]
+            binding.tvTime.text = System.currentTimeMillis().toString()
+            if(System.currentTimeMillis() - startTime >= 2000) {
+                startTime = System.currentTimeMillis()
+                binding.tvResult.text = classes[index]
+                if(Jun.contains(classes[index])) {
+                    mergeJun(classes[index])
+                }
+                else {
+                    charlist.add(classes[index])
+                }
+            }
+        }
+    }
+
+    private fun mergeJun(c: String) {
+        if(charlist.isEmpty())
+            return
+
+        val last = charlist.last()
+        if(Jun.contains(last)) {
+            when(c) {
+                "ㅣ" -> {
+                    if(last == "ㅡ") {
+                        charlist.removeLast()
+                        charlist.add("ㅢ")
+                    }
+                    else if(last == "ㅜ") {
+                        charlist.removeLast()
+                        charlist.add("ㅟ")
+                    }
+                    else if(last == "ㅗ") {
+                        charlist.removeLast()
+                        charlist.add("ㅚ")
+                    }
+                    else if(last == "ㅑ"){
+                        charlist.removeLast()
+                        charlist.add("ㅒ")
+                    }
+                    else if(last == "ㅘ") {
+                        charlist.removeLast()
+                        charlist.add("ㅙ")
+                    }
+                    else if(last == "ㅝ") {
+                        charlist.removeLast()
+                        charlist.add("ㅞ")
+                    }
+                    else if(last == "ㅕ") {
+                        charlist.removeLast()
+                        charlist.add("ㅖ")
+                    }
+                    else  {
+                        if(!Jun.contains(last)){
+                            charlist.add(c)
+                        }
+                    }
+                }
+                "ㅏ" -> {
+                    if(last == "ㅗ") {
+                        charlist.removeLast()
+                        charlist.add("ㅘ")
+                    }
+                    else {
+                        if(!Jun.contains(last)){
+                            charlist.add(c)
+                        }
+                    }
+                }
+                "ㅓ" -> {
+                    if(last == "ㅜ") {
+                        charlist.removeLast()
+                        charlist.add("ㅝ")
+                    }
+                    else {
+                        if(!Jun.contains(last)){
+                            charlist.add(c)
+                        }
+                    }
+                }
+            }
+        }
+        else {
+            charlist.add(c)
         }
 
+    }
+
+    private fun convertToSentence() {
+        if(charlist.isEmpty())
+            return
+
+        try {
+            val sentence = binding.etSentence.text.toString() + HangulParser.assemble(charlist)
+            binding.etSentence.setText(sentence)
+        }
+        catch (e: Exception) {
+            Toast.makeText(this@MainActivity, "잘못된 문장입니다. 처음부터 다시 입력해주세요!", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun getTfliteInterpreter(path: String): Interpreter? {
